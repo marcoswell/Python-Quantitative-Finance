@@ -3,6 +3,7 @@
 ## About the repository:
 - Mercado Financeiro
 - Analise de Ações
+- Trade System
 - Criação de carteiras de investimento
 - Machine Learning
 - Python

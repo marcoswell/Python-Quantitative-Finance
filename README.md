@@ -1,12 +1,12 @@
 # Python-Quantitative-Finance
 
 ## About the repository:
-- Mercado Financeiro
-- Analise de Ações
+- Financial Market
+- Stock Analysis
 - Trade System
-- Criação de carteiras de investimento
+- Investment Portfolio Creation
 - Machine Learning
 - Python
 
   
-### Autor: Marcos Well https://www.linkedin.com/in/marcoswell/
+### Author: Marcos Well https://www.linkedin.com/in/marcoswell/

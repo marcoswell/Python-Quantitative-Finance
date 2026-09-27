@@ -182,10 +182,10 @@ st.sidebar.header("⚙️ Parâmetros")
 data_source = st.sidebar.radio("Fonte de dados", ["Yahoo Finance", "Upload CSV"])
 
 if data_source == "Yahoo Finance":
-    ticker = st.sidebar.text_input("Ticker", value="BTC-USD")
+    ticker = st.sidebar.text_input("Ticker", value="^GSPC")
     col1, col2 = st.sidebar.columns(2)
-    start_date = col1.date_input("Início", value=pd.to_datetime("2020-01-01"))
-    end_date = col2.date_input("Fim", value=pd.to_datetime("2025-01-01"))
+    start_date = col1.date_input("Início", value=pd.to_datetime("2023-01-01"))
+    end_date = col2.date_input("Fim", value=pd.to_datetime("2026-01-01"))
     uploaded_file = None
 else:
     uploaded_file = st.sidebar.file_uploader(
@@ -262,13 +262,6 @@ omega_est, alpha_est, beta_est = params_est
 psi = carr_recursion(params_est, R)
 df["carr"] = psi
 
-range_vals = df["range"].to_numpy()
-n = len(df)
-carr_est = np.zeros(n)
-carr_est[0] = range_vals[0]
-for t in range(1, n):
-    carr_est[t] = omega_est + alpha_est * range_vals[t - 1] + beta_est * carr_est[t - 1]
-df["carr_est"] = carr_est
 
 last_range = R.iloc[-1]
 last_psi = psi[-1]
@@ -555,9 +548,8 @@ with tabs[2]:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df.index, y=df["range"], name="Range", line=dict(color="gray", width=1.2)))
     fig.add_trace(go.Scatter(x=df.index, y=df["carr"], name="CARR(1,1)", line=dict(color="red", width=1.5)))
-    fig.add_trace(go.Scatter(x=df.index, y=df["carr_est"].shift(1), name="Estimativa", line=dict(color="blue", width=1.5)))
     fig.update_layout(
-        title="Comparação: Range vs CARR(1,1) vs Estimativa",
+        title="Comparação: Range vs CARR(1,1)",
         xaxis_title="Data", yaxis_title="Range",
         template="plotly_white", hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -642,8 +634,8 @@ with tabs[3]:
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df.index, y=df["range"], name="Range", line=dict(color="gray", width=1.2)))
-    fig.add_trace(go.Scatter(x=df.index, y=df["carr_adap"].shift(1), name="CARR Adaptativo", line=dict(color="red", width=1.5)))
-    fig.add_trace(go.Scatter(x=df.index, y=df["carr_est"].shift(1), name="CARR Full-Sample (estático)", line=dict(color="blue", width=1.5)))
+    fig.add_trace(go.Scatter(x=df.index, y=df["carr_adap"].shift(1), name="CARR Adaptativo", line=dict(color="blue", width=1.5)))
+    fig.add_trace(go.Scatter(x=df.index, y=df["carr"].shift(1), name="CARR Full-Sample (estático)", line=dict(color="red", width=1.5)))
     fig.update_layout(
         title="Comparação: Range vs CARR Adaptativo vs CARR Full-Sample",
         xaxis_title="Data", yaxis_title="Range",
@@ -675,7 +667,7 @@ with tabs[3]:
     )
 
     comp = df.iloc[window:].copy()
-    err_full = comp["range"] - comp["carr_est"].shift(1)
+    err_full = comp["range"] - comp["carr"].shift(1)
     err_adap = comp["range"] - comp["carr_adap"].shift(1)
 
     comparacao = pd.DataFrame({

@@ -206,10 +206,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("Modelo adaptativo")
 window = st.sidebar.slider("Janela móvel (dias)", min_value=10, max_value=90, value=30, step=5)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Detecção de regimes")
-z_long = st.sidebar.number_input("Limiar z — expansão (z >)", value=1.5, step=0.1)
-z_short = st.sidebar.number_input("Limiar z — contração (z <)", value=0.5, step=0.1)
+
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Simulação Monte Carlo (VaR)")
@@ -397,28 +394,8 @@ O resultado é uma série $\psi_t^{\text{adap}}$ que reage mais rápido a mudan�
 estruturais de volatilidade do que a versão estimada uma única vez com a amostra
 inteira.
 
-## 9. Detecção de Regimes de Mercado
 
-Combinando o choque padronizado do CARR adaptativo,
-
-$$ z_t = \frac{R_t}{\psi_t^{\text{adap}}}, $$
-
-com o sinal do **retorno diário** $r_t$, é possível classificar cada dia em um
-regime bidimensional (direção × intensidade do movimento):
-
-| Retorno | Range/z | Regime | Leitura |
-|---|---|---|---|
-| Positivo ↑ | Baixo ↓ | Tendência Calma | Alta sustentável, baixo ruído |
-| Positivo ↑ | Alto ↑ | Expansão | Movimento comprador forte |
-| Negativo ↓ | Alto ↑ | Estresse | Pânico / *sell-off* |
-| Negativo ↓ | Baixo ↓ | Contração | Realização de lucros / exaustão |
-
-No dashboard, dias com $r_t \geq 0$ e $z_t$ acima de um limiar são marcados como
-**Expansão**; dias com $r_t < 0$ e $z_t$ abaixo de um limiar são marcados como
-**Estresse/Contração**. Essa classificação pode alimentar regras de alocação de
-risco (ex.: reduzir exposição em regimes de Estresse).
-
-## 10. Do Range à Volatilidade: o estimador de Parkinson
+## 9. Do Range à Volatilidade: o estimador de Parkinson
 
 Para usar o CARR em gestão de risco (VaR), é preciso converter a **previsão de
 range** em uma **previsão de volatilidade dos retornos**. O estimador de Parkinson
@@ -434,7 +411,7 @@ $$ \hat\sigma_t^2 \approx \frac{\psi_t^2}{4\ln(2)} \qquad\Longrightarrow\qquad \
 (no código, dividimos $\psi_t$ por 100 antes, pois o range foi originalmente
 multiplicado por 100 na etapa de construção dos dados).
 
-## 11. VaR paramétrico dinâmico
+## 10. VaR paramétrico dinâmico
 
 Com $\hat\sigma_t$ em mãos, o **Value at Risk** paramétrico (assumindo retornos
 condicionalmente normais, média zero) para o nível de confiança $c$ é:
@@ -457,7 +434,7 @@ Um modelo bem calibrado deve produzir uma taxa de violações próxima do nível
 nominal — por exemplo, cerca de 5% de dias violados para o VaR de 95%, e cerca de
 1% para o VaR de 99%.
 
-## 12. VaR via Simulação de Monte Carlo
+## 11. VaR via Simulação de Monte Carlo
 
 Como alternativa (ou complemento) ao VaR paramétrico fechado, pode-se **simular**
 milhares de cenários de retorno usando a volatilidade projetada pelo CARR como
@@ -476,7 +453,7 @@ choque (não precisa ser normal), incorporar caudas mais pesadas, correlações 
 ativos, ou horizontes de mais de um dia — mantendo o CARR como o motor que fornece a
 estimativa dinâmica de volatilidade em cada instante.
 
-## 13. Resumo do fluxo
+## 12. Resumo do fluxo
 
 $$
 \underbrace{H_t, L_t}_{\text{dados de preço}}
@@ -499,7 +476,6 @@ tabs = st.tabs([
     "📊 Dados & Range",
     "🧮 Estimação CARR(1,1)",
     "🔄 Modelo Adaptativo",
-    "🚦 Regimes de Mercado",
     "⚠️ VaR",
     "🎲 Monte Carlo",
 ])
@@ -692,175 +668,10 @@ with tabs[3]:
         tabela_recalib["beta"] = df.loc[recalib_dates, "beta_adap"].round(4).values
         tabela_recalib["alpha + beta"] = (tabela_recalib["alpha"] + tabela_recalib["beta"]).round(4)
         st.dataframe(tabela_recalib.set_index("Data"), use_container_width=True)
+    
 
-
-REGIMES_MD = r"""
-## Extensão do Modelo: CARR + Regimes de Mercado
-
-### Indicador de Range Padronizado
-
-O modelo **Conditional Autoregressive Range (CARR)**, proposto por Chou (2005), modela a dinâmica do *range* financeiro por meio da decomposição:
-
-$$
-R_t = \psi_t \varepsilon_t,
-$$
-
-em que $R_t$ representa o *range* observado no período $t$, $\psi_t$ corresponde ao *range* condicional esperado pelo modelo e $\varepsilon_t$ representa o erro ou *standardized range*.
-
-A partir dessa estrutura, define-se o **Indicador de Range Padronizado** como:
-
-$$
-Z_t = \frac{R_t}{\psi_t}.
-$$
-
-Assim, valores elevados de $Z_t$ indicam que o *range* observado foi superior ao esperado pelo modelo CARR, sinalizando um movimento de maior amplitude. Por outro lado, valores reduzidos indicam que o *range* realizado ficou abaixo do nível condicional esperado.
-
-> **Nota:** O indicador $Z_t$ não corresponde a um *Z-score* convencional, calculado como $(X-\mu)/\sigma$. Neste contexto, trata-se da razão entre o *range* observado e seu valor condicional estimado pelo modelo CARR, sendo interpretado como um *standardized range* ou erro padronizado.
-
-### Classificação dos Regimes de Mercado
-
-A partir do indicador $Z_t$, propõe-se uma classificação bidimensional que combina a magnitude do *range* padronizado com a direção dos retornos diários.
-
-Essa classificação constitui uma **extensão analítica proposta neste trabalho**, inspirada na literatura de modelos de *regime switching* aplicados à volatilidade baseada em *ranges*. O objetivo é identificar diferentes estados de mercado a partir da combinação entre **direção do movimento de preços** e **intensidade relativa do movimento**.
-
-Para isso, são definidos dois limiares para o indicador $Z_t$, permitindo separar os períodos de baixa e alta intensidade. Dias em que $Z_t$ permanece entre esses limiares são classificados como **Neutros**.
-
-| Retorno Diário | Range Padronizado ($Z_t$) | Classificação do Regime | Dinâmica do Mercado |
-| :---: | :---: | :--- | :--- |
-| **Positivo** ($\uparrow$) | **Baixo** ($\downarrow$) | **Tendência Calma** | Movimento de alta com baixa intensidade relativa |
-| **Positivo** ($\uparrow$) | **Alto** ($\uparrow$) | **Expansão** | Movimento de alta acompanhado de elevada amplitude |
-| **Negativo** ($\downarrow$) | **Alto** ($\uparrow$) | **Estresse** | Movimento de queda acompanhado de elevada amplitude |
-| **Negativo** ($\downarrow$) | **Baixo** ($\downarrow$) | **Contração** | Movimento de queda com baixa intensidade relativa |
-| **Qualquer** | **Intermediário** | **Neutro** | Comportamento sem intensidade suficientemente elevada ou reduzida |
-
-Essa estrutura permite complementar a análise tradicional de volatilidade, identificando não apenas **quanto o mercado está se movimentando em relação ao esperado**, mas também **em qual direção esse movimento ocorre**.
-
-Consequentemente, os regimes podem ser utilizados como variáveis condicionantes em análises de risco e estratégias quantitativas. Por exemplo, períodos classificados como **Tendência Calma** podem representar ambientes de menor intensidade relativa, enquanto períodos de **Estresse** podem sinalizar condições de maior risco e justificar mecanismos de proteção ou redução de exposição.
-
-### Referências
-
-- Chou, R. Y. (2005). *Forecasting Financial Volatilities with Extreme Values: The Conditional Autoregressive Range (CARR) Model*. **Journal of Money, Credit and Banking**, 37(3), 561–582.
-- Wu, P.-T., Su, J.-B., & Miao, B. (2012). *Markov-Switching Range-Based Volatility Models*. **Journal of Forecasting**.
-"""
-
-REGIME_COLORS = {
-    "Tendência Calma": "#2ecc71",   # verde
-    "Expansão": "#3498db",          # azul
-    "Estresse": "#e74c3c",          # vermelho
-    "Contração": "#f39c12",         # laranja
-    "Neutro": "#7f8c8d",            # cinza
-}
-
-# --- Aba 4: Regimes de Mercado ---
+# --- Aba 4: VaR ---
 with tabs[4]:
-    st.markdown(REGIMES_MD)
-    st.divider()
-    st.subheader(f"Classificação de regimes — {ticker}")
-
-    positivo = df["return"] >= 0
-    z_alto = df["z"] > z_long
-    z_baixo = df["z"] < z_short
-
-    condicoes = [
-        positivo & z_baixo,
-        positivo & z_alto,
-        ~positivo & z_alto,
-        ~positivo & z_baixo,
-    ]
-    nomes = ["Tendência Calma", "Expansão", "Estresse", "Contração"]
-
-    df["regime"] = np.select(condicoes, nomes, default="Neutro")
-    df.loc[df["z"].isna(), "regime"] = np.nan
-    df["return_fwd"] = df["return"].shift(-1)
-    df["return_fwd_abs"] = df["return_fwd"].abs()
-    # Soma dos retornos dos PRÓXIMOS 5 dias (não inclui o dia atual)
-    df["return_fwd_5d"] = (
-        df["return"][::-1].rolling(window=5, min_periods=5).sum()[::-1].shift(-1)
-    )
-    df["return_fwd_5d_abs"] = df["return_fwd_5d"].abs()
-
-    contagem = df["regime"].value_counts()
-    total_classificado = contagem.sum()
-
-    cols = st.columns(len(nomes) + 1)
-    for col, nome in zip(cols, nomes + ["Neutro"]):
-        qtd = int(contagem.get(nome, 0))
-        pct = (qtd / total_classificado * 100) if total_classificado else 0.0
-        col.metric(nome, f"{qtd} dias", f"{pct:.1f}%")
-
-    with st.expander("📋 Estatísticas por regime (retorno médio, z médio)", expanded= True):
-        resumo = (
-            df.dropna(subset=["regime"])
-            .groupby("regime")
-            .agg(
-                dias=("regime", "count"),
-                retorno_medio=("return_fwd_abs", "mean"),
-                mov_5d=("return_fwd_5d_abs", "mean"),
-                z_medio=("z", "mean"),
-                vol_media=("vol", "mean"),
-            )
-            .reindex(nomes + ["Neutro"])
-            .dropna(how="all")
-        )
-        resumo["retorno_medio"] = (resumo["retorno_medio"] * 100).round(3)
-        resumo["mov_5d"] = (resumo["mov_5d"] * 100).round(3)
-        resumo["z_medio"] = resumo["z_medio"].round(3)
-        resumo["vol_media"] = (resumo["vol_media"] * 100).round(2)
-        resumo = resumo.rename(columns={
-            "dias": "Dias",
-            "retorno_medio": "Retorno médio absoluto (%) - Dia Posterior",
-            "mov_5d": "Movimentação abs. méd. próx. 5 dias (%)",
-            "z_medio": "z médio",
-            "vol_media": "Vol. anualizada média (%)",
-        })
-        st.dataframe(resumo, use_container_width=True)
-        
-
-    fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
-        row_heights=[0.75, 0.25], vertical_spacing=0.05,
-    )
-    fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines", name=ticker,
-                              line=dict(color="rgba(255,255,255,0.5)", width=1)), row=1, col=1)
-
-    for nome in nomes:
-        mask = df["regime"] == nome
-        if mask.any():
-            fig.add_trace(go.Scatter(
-                x=df.index, y=np.where(mask, df["Close"], np.nan),
-                mode="markers", name=nome,
-                marker=dict(color=REGIME_COLORS[nome], size=6),
-            ), row=1, col=1)
-
-    fig.add_trace(go.Scatter(x=df.index, y=df["z"], mode="lines", name="z",
-                              line=dict(color="gray", width=1)), row=2, col=1)
-    fig.add_hline(y=z_long, line=dict(color=REGIME_COLORS["Expansão"], dash="dash"),
-                  annotation_text=f"z alto ({z_long})", row=2, col=1)
-    fig.add_hline(y=z_short, line=dict(color=REGIME_COLORS["Contração"], dash="dash"),
-                  annotation_text=f"z baixo ({z_short})", row=2, col=1)
-
-    fig.update_layout(
-        title=f"CARR + regimes de mercado aplicado ao {ticker}",
-        template="plotly_dark", height=750,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    fig.update_yaxes(title_text="Preço", row=1, col=1)
-    fig.update_yaxes(title_text="z", row=2, col=1)
-    st.plotly_chart(fig, use_container_width=True)
-
-    fig_bar = px.bar(
-        contagem.reindex(nomes + ["Neutro"]).dropna(),
-        orientation="h",
-        color=contagem.reindex(nomes + ["Neutro"]).dropna().index,
-        color_discrete_map=REGIME_COLORS,
-        labels={"value": "Nº de dias", "index": "Regime"},
-        title="Distribuição de dias por regime",
-    )
-    fig_bar.update_layout(template="plotly_dark", showlegend=False, height=350)
-    st.plotly_chart(fig_bar, use_container_width=True)
-
-# --- Aba 5: VaR ---
-with tabs[5]:
     st.subheader("VaR Dinâmico via CARR (Parkinson)")
 
     df["Return"] = np.log(df["Close"] / df["Close"].shift(1))
@@ -908,8 +719,8 @@ with tabs[5]:
     )
     st.plotly_chart(fig_hist, use_container_width=True)
 
-# --- Aba 6: Monte Carlo ---
-with tabs[6]:
+# --- Aba 5: Monte Carlo ---
+with tabs[5]:
     st.subheader("VaR via Simulação de Monte Carlo")
 
     sigma_projetado = df["cond_vol"].iloc[-1]

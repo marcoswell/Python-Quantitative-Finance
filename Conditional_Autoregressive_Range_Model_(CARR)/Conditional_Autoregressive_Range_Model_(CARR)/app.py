@@ -75,7 +75,9 @@ def estimate_carr(R, initial_params):
 
 
 def run_adaptive_carr(df, R, initial_params, window):
-    """Modelo adaptativo: recalibra no início de cada mês, usando janela móvel."""
+    """Modelo adaptativo: recalibra toda Sexta-Feira(caso a bolsa esteja fechada, o modelo continuara com os antigos parâmetros),
+    usando janela móvel.
+    """
     forecasts = []
     psi_rolling = []
     params_history = []      # (omega, alpha, beta) vigentes em cada dia t
@@ -87,7 +89,8 @@ def run_adaptive_carr(df, R, initial_params, window):
         R_train = R.iloc[t - window:t] if isinstance(R, pd.Series) else R[t - window:t]
         did_recalibrate = False
 
-        if t == window or df.index[t].month != df.index[t - 1].month:
+        # Altere a condição para recalibrar apenas nas Sextas-Feiras(weekday == 4)
+        if t == window or df.index[t].weekday() == 4:
             result = minimize(
                 negative_log_likelihood,
                 current_params,
@@ -163,7 +166,7 @@ def cached_estimate(R_values, initial_params):
     return result.x, result.success
 
 
-@st.cache_data(show_spinner="Rodando modelo adaptativo (recalibragem mensal)...")
+@st.cache_data(show_spinner="Rodando modelo adaptativo (recalibragem semanal(Sexta-Feira))...")
 def cached_adaptive(df_index, R_values, initial_params, window):
     df_idx = pd.DataFrame(index=pd.DatetimeIndex(df_index))
     R = pd.Series(R_values, index=df_idx.index)
@@ -375,7 +378,7 @@ resíduos com média próxima de 1. A interpretação é direta:
 - $\hat\epsilon_t < 1$: o range observado foi **menor** que o esperado (mercado mais
   "calmo" que o previsto).
 
-## 8. Modelo Adaptativo (janela móvel com recalibragem mensal)
+## 8. Modelo Adaptativo (janela móvel com recalibragem semanal)
 
 Mercados mudam de regime ao longo do tempo, e os parâmetros $(\omega,\alpha,\beta)$
 estimados com uma amostra fixa podem ficar defasados. A versão **adaptativa**
@@ -383,8 +386,7 @@ resolve isso:
 
 1. Usa apenas uma **janela móvel** das últimas $W$ observações (padrão: 30 dias) para
    reestimar o modelo;
-2. **Recalibra os parâmetros no início de cada mês** (quando o mês da data muda em
-   relação ao dia anterior), em vez de a cada novo dado — um compromisso entre
+2. **Recalibra os parâmetros toda Sexta-Feira**, em vez de a cada novo dado — um compromisso entre
    estabilidade numérica e capacidade de adaptação;
 3. Inclui uma **trava de segurança**: só aceita os novos parâmetros se a otimização
    convergiu (`result.success`) e se a condição de estacionariedade
@@ -582,10 +584,10 @@ reestimando os parâmetros periodicamente, usando apenas dados recentes:
 1. **Janela móvel de WINDOW_PLACEHOLDER dias** — a cada passo, o modelo enxerga somente
    os últimos WINDOW_PLACEHOLDER valores de range para calcular $\psi_t$, "esquecendo"
    deliberadamente o passado distante.
-2. **Recalibragem no início de cada mês** — em vez de reotimizar $(\omega,\alpha,\beta)$
+2. **Recalibragem toda Sexta-Feira** — em vez de reotimizar $(\omega,\alpha,\beta)$
    todo dia (caro computacionalmente e instável), a reestimação por máxima
-   verossimilhança só ocorre quando o mês da data muda em relação ao dia anterior.
-   Nos demais dias, os parâmetros vigentes do último mês continuam sendo usados.
+   verossimilhança nas Sextas-Feiras.
+   Nos demais dias, os parâmetros vigentes continuam sendo usados.
 3. **Trava de segurança (estacionariedade)** — uma nova recalibragem só é aceita se o
    otimizador convergiu (`result.success`) **e** se $\alpha+\beta < 0,999$ continuar
    valendo. Caso contrário, o modelo mantém os parâmetros anteriores, evitando que uma
@@ -599,7 +601,7 @@ janela curta de dados.
 with tabs[3]:
     st.markdown(ADAPTATIVO_MD)
     st.divider()
-    st.subheader(f"Modelo Adaptativo — recalibragem mensal, janela de {window} dias")
+    st.subheader(f"Modelo Adaptativo — recalibragem semanal (Sexta-Feira), janela de {window} dias")
 
     forecasts, psi_rolling, params_history, recalib_flags = cached_adaptive(
         tuple(df.index.astype(str)), tuple(R.values), tuple(initial_params), window
@@ -646,7 +648,7 @@ with tabs[3]:
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Evolução dos parâmetros recalibrados")
-    st.caption("Cada 'degrau' representa uma recalibragem mensal aceita pelo modelo.")
+    st.caption("Cada 'degrau' representa uma recalibragem semanal aceita pelo modelo.")
     fig_params = make_subplots(rows=3, cols=1, shared_xaxes=True,
                                 subplot_titles=("ω (omega)", "α (alpha)", "β (beta)"),
                                 vertical_spacing=0.06)
@@ -695,28 +697,50 @@ with tabs[3]:
 REGIMES_MD = r"""
 ## Extensão do Modelo: CARR + Regimes de Mercado
 
-A ideia central consiste em isolar o choque padronizado de volatilidade ($Z_t$),
-definindo-o como a razão entre a amplitude observada e a amplitude condicional
-estimada pelo modelo CARR:
+### Indicador de Range Padronizado
 
-$$ Z_t = \frac{R_t}{\psi_t} $$
+O modelo **Conditional Autoregressive Range (CARR)**, proposto por Chou (2005), modela a dinâmica do *range* financeiro por meio da decomposição:
 
-Ao cruzar a magnitude deste resíduo ($Z_t$, ou a própria amplitude $R_t$) com a
-direção dos **retornos diários**, podemos classificar o mercado em diferentes
-estados (regimes). A matriz abaixo ilustra a categorização bidimensional usada
-neste dashboard:
+$$
+R_t = \psi_t \varepsilon_t,
+$$
 
-| Retorno Diário | Volatilidade / Range ($Z_t$) | Classificação do Regime | Dinâmica do Mercado |
+em que $R_t$ representa o *range* observado no período $t$, $\psi_t$ corresponde ao *range* condicional esperado pelo modelo e $\varepsilon_t$ representa o erro ou *standardized range*.
+
+A partir dessa estrutura, define-se o **Indicador de Range Padronizado** como:
+
+$$
+Z_t = \frac{R_t}{\psi_t}.
+$$
+
+Assim, valores elevados de $Z_t$ indicam que o *range* observado foi superior ao esperado pelo modelo CARR, sinalizando um movimento de maior amplitude. Por outro lado, valores reduzidos indicam que o *range* realizado ficou abaixo do nível condicional esperado.
+
+> **Nota:** O indicador $Z_t$ não corresponde a um *Z-score* convencional, calculado como $(X-\mu)/\sigma$. Neste contexto, trata-se da razão entre o *range* observado e seu valor condicional estimado pelo modelo CARR, sendo interpretado como um *standardized range* ou erro padronizado.
+
+### Classificação dos Regimes de Mercado
+
+A partir do indicador $Z_t$, propõe-se uma classificação bidimensional que combina a magnitude do *range* padronizado com a direção dos retornos diários.
+
+Essa classificação constitui uma **extensão analítica proposta neste trabalho**, inspirada na literatura de modelos de *regime switching* aplicados à volatilidade baseada em *ranges*. O objetivo é identificar diferentes estados de mercado a partir da combinação entre **direção do movimento de preços** e **intensidade relativa do movimento**.
+
+Para isso, são definidos dois limiares para o indicador $Z_t$, permitindo separar os períodos de baixa e alta intensidade. Dias em que $Z_t$ permanece entre esses limiares são classificados como **Neutros**.
+
+| Retorno Diário | Range Padronizado ($Z_t$) | Classificação do Regime | Dinâmica do Mercado |
 | :---: | :---: | :--- | :--- |
-| **Positivo** ($\uparrow$) | **Baixo** ($\downarrow$) | Tendência Calma | Crescimento sustentável com baixo ruído |
-| **Positivo** ($\uparrow$) | **Alto** ($\uparrow$) | Expansão | Movimento de forte tração compradora |
-| **Negativo** ($\downarrow$) | **Alto** ($\uparrow$) | Estresse | Pânico, *sell-off* ou correção abrupta |
-| **Negativo** ($\downarrow$) | **Baixo** ($\downarrow$) | Contração | Realização de lucros ou exaustão lenta |
+| **Positivo** ($\uparrow$) | **Baixo** ($\downarrow$) | **Tendência Calma** | Movimento de alta com baixa intensidade relativa |
+| **Positivo** ($\uparrow$) | **Alto** ($\uparrow$) | **Expansão** | Movimento de alta acompanhado de elevada amplitude |
+| **Negativo** ($\downarrow$) | **Alto** ($\uparrow$) | **Estresse** | Movimento de queda acompanhado de elevada amplitude |
+| **Negativo** ($\downarrow$) | **Baixo** ($\downarrow$) | **Contração** | Movimento de queda com baixa intensidade relativa |
+| **Qualquer** | **Intermediário** | **Neutro** | Comportamento sem intensidade suficientemente elevada ou reduzida |
 
-> **Nota:** Essa estrutura permite não apenas analisar o risco, mas também construir
-> estratégias quantitativas condicionadas ao estado atual do mercado (ex.: alocar
-> mais risco em "Tendência Calma" e proteger o portfólio em "Estresse"). Dias em que
-> $Z_t$ fica entre os dois limiares (nem alto, nem baixo) ficam como **Neutro**.
+Essa estrutura permite complementar a análise tradicional de volatilidade, identificando não apenas **quanto o mercado está se movimentando em relação ao esperado**, mas também **em qual direção esse movimento ocorre**.
+
+Consequentemente, os regimes podem ser utilizados como variáveis condicionantes em análises de risco e estratégias quantitativas. Por exemplo, períodos classificados como **Tendência Calma** podem representar ambientes de menor intensidade relativa, enquanto períodos de **Estresse** podem sinalizar condições de maior risco e justificar mecanismos de proteção ou redução de exposição.
+
+### Referências
+
+- Chou, R. Y. (2005). *Forecasting Financial Volatilities with Extreme Values: The Conditional Autoregressive Range (CARR) Model*. **Journal of Money, Credit and Banking**, 37(3), 561–582.
+- Wu, P.-T., Su, J.-B., & Miao, B. (2012). *Markov-Switching Range-Based Volatility Models*. **Journal of Forecasting**.
 """
 
 REGIME_COLORS = {

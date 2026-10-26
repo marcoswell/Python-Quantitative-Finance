@@ -33,4 +33,3 @@ streamlit run app.py
 ### Referências
 
 - Chou, R. Y. (2005). *Forecasting Financial Volatilities with Extreme Values: The Conditional Autoregressive Range (CARR) Model*. **Journal of Money, Credit and Banking**, 37(3), 561–582.
-"""

@@ -17,8 +17,6 @@ streamlit run app.py
   notebook) e mostra o ajuste CARR(1,1) vs. range observado, além dos resíduos εₜ.
 - **Modelo Adaptativo**: reproduz a recalibragem mensal com janela móvel (padrão 30 dias),
   configurável na barra lateral.
-- **Regimes de Mercado**: classifica dias em "Expansão" / "Estresse-Contração" com base no
-  choque padronizado zₜ = Rₜ/ψₜ e no sinal do retorno diário; limiares ajustáveis.
 - **VaR**: VaR paramétrico dinâmico (aproximação de Parkinson) com backtest de violações
   (hit rate) e histograma.
 - **Monte Carlo**: simulação de PnL para VaR 90/95/99% dado um capital investido.

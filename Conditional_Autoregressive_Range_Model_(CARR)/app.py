@@ -469,6 +469,12 @@ $$
 
 Esse é o encadeamento teórico completo, do range bruto até a métrica de risco final,
 que sustenta todas as abas deste dashboard.
+
+
+### Referências
+
+- Chou, R. Y. (2005). *Forecasting Financial Volatilities with Extreme Values: The Conditional Autoregressive Range (CARR) Model*. **Journal of Money, Credit and Banking**, 37(3), 561–582.
+
 """
 
 tabs = st.tabs([
